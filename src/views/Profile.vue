@@ -1,7 +1,8 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useTravelStore } from '../stores/travel'
+import { LUGGAGE_CATEGORIES } from '../constants'
 import { formatMoney, formatDate } from '../utils/format'
 import { planTotalSpend, planPackingRate } from '../services/selectors'
 import StarRating from '../components/common/StarRating.vue'
@@ -12,6 +13,29 @@ const router = useRouter()
 const stats = computed(() => store.dashboardStats)
 const unlocked = computed(() => store.achievements.filter((a) => a.unlocked))
 const summarized = computed(() => store.plans.filter((p) => p.summary))
+
+// ===== 个人物品库 =====
+const libName = ref('')
+const libCategory = ref(LUGGAGE_CATEGORIES[0])
+const libError = ref('')
+
+const libraryGrouped = computed(() =>
+  LUGGAGE_CATEGORIES.map((cat) => ({
+    cat,
+    items: store.itemLibrary.filter((i) => i.category === cat),
+  })).filter((g) => g.items.length > 0)
+)
+
+function addLibraryItem() {
+  const name = libName.value.trim()
+  if (!name) return
+  if (!store.addLibraryItem(name, libCategory.value)) {
+    libError.value = '物品库中已存在同名物品'
+    return
+  }
+  libName.value = ''
+  libError.value = ''
+}
 </script>
 
 <template>
@@ -30,6 +54,42 @@ const summarized = computed(() => store.plans.filter((p) => p.summary))
         <span class="stat-label">已解锁徽章</span>
         <strong>{{ unlocked.length }} / {{ store.totalAchievements }}</strong>
       </div>
+    </div>
+
+    <!-- 我的物品库 -->
+    <div class="card mt-16">
+      <h3 class="card-title">我的物品库</h3>
+      <div class="lib-add">
+        <input
+          v-model="libName"
+          class="input"
+          placeholder="物品名称"
+          @keyup.enter="addLibraryItem"
+        />
+        <select v-model="libCategory" class="select">
+          <option v-for="c in LUGGAGE_CATEGORIES" :key="c" :value="c">{{ c }}</option>
+        </select>
+        <button type="button" class="btn btn-primary btn-sm" @click="addLibraryItem">添加</button>
+      </div>
+      <p v-if="libError" class="lib-error">{{ libError }}</p>
+      <template v-if="libraryGrouped.length">
+        <div v-for="group in libraryGrouped" :key="group.cat" class="lib-group">
+          <div class="lib-group-title">{{ group.cat }}</div>
+          <div class="lib-items">
+            <span v-for="entry in group.items" :key="entry.id" class="lib-chip">
+              {{ entry.name }}
+              <button
+                type="button"
+                class="lib-chip-remove"
+                title="从物品库删除"
+                @click="store.removeLibraryItem(entry.id)"
+              >×</button>
+            </span>
+          </div>
+        </div>
+        <p class="text-muted lib-tip">从库中删除不会影响已添加到计划里的物品</p>
+      </template>
+      <p v-else class="empty">物品库为空，在计划中添加的自定义物品会自动收录到这里</p>
     </div>
 
     <!-- 我的出行计划 -->
@@ -123,5 +183,71 @@ const summarized = computed(() => store.plans.filter((p) => p.summary))
 
 .summary-item .text-muted {
   font-size: 13px;
+}
+
+.lib-add {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.lib-add .input {
+  flex: 1;
+  min-width: 120px;
+}
+
+.lib-add .select {
+  width: auto;
+}
+
+.lib-error {
+  color: var(--danger);
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+
+.lib-group {
+  margin-top: 12px;
+}
+
+.lib-group-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+
+.lib-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.lib-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: var(--bg);
+  border-radius: 20px;
+  font-size: 13px;
+}
+
+.lib-chip-remove {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 2px;
+}
+
+.lib-chip-remove:hover {
+  color: var(--danger);
+}
+
+.lib-tip {
+  margin-top: 12px;
+  font-size: 12px;
 }
 </style>

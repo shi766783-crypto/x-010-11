@@ -4,6 +4,7 @@ import { useTravelStore } from '../../stores/travel'
 import { LUGGAGE_CATEGORIES } from '../../constants'
 import { luggageCompletionRate } from '../../services/luggage'
 import ProgressBar from '../common/ProgressBar.vue'
+import Modal from '../common/Modal.vue'
 
 const props = defineProps({
   planId: { type: String, required: true },
@@ -37,6 +38,26 @@ function addCustom() {
   store.addCustomItem(props.planId, props.memberId, name, newCategory.value)
   newName.value = ''
   showAdd.value = false
+}
+
+// ===== 从物品库挑选 =====
+const showLibrary = ref(false)
+
+// 物品库按分类分组展示
+const libraryGrouped = computed(() =>
+  LUGGAGE_CATEGORIES.map((cat) => ({
+    cat,
+    items: store.itemLibrary.filter((i) => i.category === cat),
+  })).filter((g) => g.items.length > 0)
+)
+
+// 当前清单中是否已有同名物品（用于置灰，防止重复挑选）
+function isAdded(name) {
+  return (list.value.items || []).some((i) => i.name === name)
+}
+
+function pick(entry) {
+  store.addItemFromLibrary(props.planId, props.memberId, entry.id)
 }
 </script>
 
@@ -88,10 +109,44 @@ function addCustom() {
         <button type="button" class="btn btn-primary btn-sm" @click="addCustom">添加</button>
         <button type="button" class="btn btn-ghost btn-sm" @click="showAdd = false">取消</button>
       </template>
-      <button v-else type="button" class="btn btn-ghost btn-sm" @click="showAdd = true">
-        + 添加自定义物品
-      </button>
+      <template v-else>
+        <button type="button" class="btn btn-ghost btn-sm" @click="showAdd = true">
+          + 添加自定义物品
+        </button>
+        <button type="button" class="btn btn-ghost btn-sm" @click="showLibrary = true">
+          从物品库选择
+        </button>
+      </template>
     </div>
+
+    <!-- 物品库挑选弹窗 -->
+    <Modal :show="showLibrary" title="从物品库选择" @close="showLibrary = false">
+      <template v-if="libraryGrouped.length">
+        <div v-for="group in libraryGrouped" :key="group.cat" class="lib-group">
+          <div class="group-title">{{ group.cat }}</div>
+          <ul class="item-list">
+            <li v-for="entry in group.items" :key="entry.id" class="lib-item">
+              <span class="lib-name">{{ entry.name }}</span>
+              <span v-if="isAdded(entry.name)" class="tag tag-gray">已添加</span>
+              <button
+                v-else
+                type="button"
+                class="btn btn-primary btn-sm"
+                @click="pick(entry)"
+              >添加</button>
+              <button
+                type="button"
+                class="item-remove lib-remove"
+                title="从物品库删除（不影响已生成的计划）"
+                @click="store.removeLibraryItem(entry.id)"
+              >×</button>
+            </li>
+          </ul>
+        </div>
+        <p class="text-muted lib-tip">从库中删除不会影响已添加到计划里的物品</p>
+      </template>
+      <p v-else class="empty">物品库为空，添加自定义物品后会自动收录</p>
+    </Modal>
   </div>
 </template>
 
@@ -194,5 +249,30 @@ function addCustom() {
 
 .add-custom .select {
   width: auto;
+}
+
+.lib-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 4px;
+  border-radius: 6px;
+}
+
+.lib-item:hover {
+  background: var(--bg);
+}
+
+.lib-name {
+  flex: 1;
+}
+
+.lib-remove {
+  opacity: 1;
+}
+
+.lib-tip {
+  margin-top: 12px;
+  font-size: 12px;
 }
 </style>

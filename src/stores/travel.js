@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { planStorage } from '../services/storage'
+import { planStorage, itemLibraryStorage } from '../services/storage'
 import { generateLuggageTemplate, getDestinationType } from '../services/luggage'
 import { generateDefaultTodos } from '../services/todo'
 import { computeAchievements, TOTAL_ACHIEVEMENTS } from '../services/achievements'
@@ -17,6 +17,7 @@ function buildMemberNames(input) {
 export const useTravelStore = defineStore('travel', {
   state: () => ({
     plans: [],
+    itemLibrary: [],
   }),
 
   getters: {
@@ -31,9 +32,11 @@ export const useTravelStore = defineStore('travel', {
     // ===== 持久化 =====
     load() {
       this.plans = planStorage.read([])
+      this.itemLibrary = itemLibraryStorage.read([])
     },
     persist() {
       planStorage.write(this.plans)
+      itemLibraryStorage.write(this.itemLibrary)
     },
 
     // ===== 出行计划 =====
@@ -119,7 +122,43 @@ export const useTravelStore = defineStore('travel', {
       const plan = this.planById(planId)
       if (!plan) return
       const list = this._findLuggageList(plan, memberId)
+      // 同名物品不重复添加
+      if (list.items.some((i) => i.name === name)) return
       list.items.push({ id: uid(), name, category, custom: true, packed: false })
+      // 自定义物品同步沉淀到个人物品库
+      this._upsertLibraryItem(name, category)
+    },
+
+    addItemFromLibrary(planId, memberId, libraryItemId) {
+      const plan = this.planById(planId)
+      const entry = this.itemLibrary.find((i) => i.id === libraryItemId)
+      if (!plan || !entry) return
+      const list = this._findLuggageList(plan, memberId)
+      // 同一物品重复挑选时不产生重复条目
+      if (list.items.some((i) => i.name === entry.name)) return
+      list.items.push({ id: uid(), name: entry.name, category: entry.category, custom: true, packed: false })
+    },
+
+    // ===== 个人物品库 =====
+    // 按名称收录物品，已存在时直接返回原条目
+    _upsertLibraryItem(name, category) {
+      const exist = this.itemLibrary.find((i) => i.name === name)
+      if (exist) return exist
+      const entry = { id: uid(), name, category }
+      this.itemLibrary.push(entry)
+      return entry
+    },
+
+    addLibraryItem(name, category) {
+      const trimmed = String(name || '').trim()
+      if (!trimmed || this.itemLibrary.some((i) => i.name === trimmed)) return false
+      this.itemLibrary.push({ id: uid(), name: trimmed, category })
+      return true
+    },
+
+    // 仅删除库条目，不影响已生成到各计划里的物品
+    removeLibraryItem(id) {
+      this.itemLibrary = this.itemLibrary.filter((i) => i.id !== id)
     },
 
     removeItem(planId, memberId, itemId) {
