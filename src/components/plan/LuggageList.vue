@@ -4,6 +4,7 @@ import { useTravelStore } from '../../stores/travel'
 import { LUGGAGE_CATEGORIES } from '../../constants'
 import { luggageCompletionRate } from '../../services/luggage'
 import ProgressBar from '../common/ProgressBar.vue'
+import Modal from '../common/Modal.vue'
 
 const props = defineProps({
   planId: { type: String, required: true },
@@ -30,13 +31,38 @@ const rate = computed(() => luggageCompletionRate(list.value.items))
 const showAdd = ref(false)
 const newName = ref('')
 const newCategory = ref(LUGGAGE_CATEGORIES[0])
+const saveToLibrary = ref(true)
 
 function addCustom() {
   const name = newName.value.trim()
   if (!name) return
-  store.addCustomItem(props.planId, props.memberId, name, newCategory.value)
+  store.addCustomItem(props.planId, props.memberId, name, newCategory.value, saveToLibrary.value)
   newName.value = ''
   showAdd.value = false
+}
+
+// ===== 从物品库选择 =====
+const showLibrary = ref(false)
+const pickedIds = ref([])
+
+const libraryGrouped = computed(() =>
+  LUGGAGE_CATEGORIES.map((cat) => ({
+    cat,
+    items: store.itemLibrary.filter((i) => i.category === cat),
+  })).filter((g) => g.items.length > 0)
+)
+
+// 清单中已有的物品名称，用于禁用重复挑选
+const existingNames = computed(() => new Set((list.value.items || []).map((i) => i.name)))
+
+function openLibrary() {
+  pickedIds.value = []
+  showLibrary.value = true
+}
+
+function addPicked() {
+  store.addLibraryItemsToLuggage(props.planId, props.memberId, pickedIds.value)
+  showLibrary.value = false
 }
 </script>
 
@@ -85,13 +111,61 @@ function addCustom() {
         <select v-model="newCategory" class="select">
           <option v-for="c in LUGGAGE_CATEGORIES" :key="c" :value="c">{{ c }}</option>
         </select>
+        <label class="save-lib">
+          <input v-model="saveToLibrary" type="checkbox" />
+          存入物品库
+        </label>
         <button type="button" class="btn btn-primary btn-sm" @click="addCustom">添加</button>
         <button type="button" class="btn btn-ghost btn-sm" @click="showAdd = false">取消</button>
       </template>
-      <button v-else type="button" class="btn btn-ghost btn-sm" @click="showAdd = true">
-        + 添加自定义物品
-      </button>
+      <template v-else>
+        <button type="button" class="btn btn-ghost btn-sm" @click="showAdd = true">
+          + 添加自定义物品
+        </button>
+        <button
+          v-if="store.itemLibrary.length"
+          type="button"
+          class="btn btn-ghost btn-sm"
+          @click="openLibrary"
+        >
+          从物品库选择
+        </button>
+      </template>
     </div>
+
+    <Modal :show="showLibrary" title="从物品库选择" @close="showLibrary = false">
+      <div class="lib-groups">
+        <div v-for="group in libraryGrouped" :key="group.cat" class="group">
+          <div class="group-title">{{ group.cat }}</div>
+          <label
+            v-for="item in group.items"
+            :key="item.id"
+            class="lib-item"
+            :class="{ disabled: existingNames.has(item.name) }"
+          >
+            <input
+              v-model="pickedIds"
+              type="checkbox"
+              :value="item.id"
+              :disabled="existingNames.has(item.name)"
+            />
+            <span class="lib-name">{{ item.name }}</span>
+            <span v-if="existingNames.has(item.name)" class="tag tag-gray">已添加</span>
+          </label>
+        </div>
+      </div>
+      <template #footer>
+        <button type="button" class="btn btn-ghost btn-sm" @click="showLibrary = false">取消</button>
+        <button
+          type="button"
+          class="btn btn-primary btn-sm"
+          :disabled="!pickedIds.length"
+          @click="addPicked"
+        >
+          添加到清单{{ pickedIds.length ? `（${pickedIds.length}）` : '' }}
+        </button>
+      </template>
+    </Modal>
   </div>
 </template>
 
@@ -194,5 +268,47 @@ function addCustom() {
 
 .add-custom .select {
   width: auto;
+}
+
+.save-lib {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.save-lib input {
+  accent-color: var(--primary);
+}
+
+.lib-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 4px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.lib-item:hover {
+  background: var(--bg);
+}
+
+.lib-item.disabled {
+  cursor: not-allowed;
+  color: var(--text-muted);
+}
+
+.lib-item input {
+  accent-color: var(--primary);
+  width: 16px;
+  height: 16px;
+}
+
+.lib-item .lib-name {
+  flex: 1;
 }
 </style>

@@ -1,9 +1,10 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useTravelStore } from '../stores/travel'
 import { formatMoney, formatDate } from '../utils/format'
 import { planTotalSpend, planPackingRate } from '../services/selectors'
+import { LUGGAGE_CATEGORIES } from '../constants'
 import StarRating from '../components/common/StarRating.vue'
 
 const store = useTravelStore()
@@ -12,6 +13,24 @@ const router = useRouter()
 const stats = computed(() => store.dashboardStats)
 const unlocked = computed(() => store.achievements.filter((a) => a.unlocked))
 const summarized = computed(() => store.plans.filter((p) => p.summary))
+
+// ===== 个人物品库 =====
+const libName = ref('')
+const libCategory = ref(LUGGAGE_CATEGORIES[0])
+
+const libraryGroups = computed(() =>
+  LUGGAGE_CATEGORIES.map((cat) => ({
+    cat,
+    items: store.itemLibrary.filter((i) => i.category === cat),
+  })).filter((g) => g.items.length > 0)
+)
+
+function addLibItem() {
+  const name = libName.value.trim()
+  if (!name) return
+  store.addLibraryItem(name, libCategory.value)
+  libName.value = ''
+}
 </script>
 
 <template>
@@ -50,6 +69,41 @@ const summarized = computed(() => store.plans.filter((p) => p.summary))
         </tbody>
       </table>
       <p v-else class="empty">暂无出行计划</p>
+    </div>
+
+    <!-- 我的物品库 -->
+    <div class="card mt-16">
+      <h3 class="card-title">我的物品库</h3>
+      <div class="lib-add">
+        <input
+          v-model="libName"
+          class="input"
+          placeholder="物品名称"
+          @keyup.enter="addLibItem"
+        />
+        <select v-model="libCategory" class="select">
+          <option v-for="c in LUGGAGE_CATEGORIES" :key="c" :value="c">{{ c }}</option>
+        </select>
+        <button type="button" class="btn btn-primary btn-sm" @click="addLibItem">添加</button>
+      </div>
+      <div v-if="libraryGroups.length" class="lib-groups">
+        <div v-for="group in libraryGroups" :key="group.cat" class="lib-group">
+          <span class="lib-cat">{{ group.cat }}</span>
+          <div class="lib-items">
+            <span v-for="item in group.items" :key="item.id" class="lib-chip">
+              {{ item.name }}
+              <button
+                type="button"
+                class="lib-remove"
+                title="从物品库删除"
+                @click="store.removeLibraryItem(item.id)"
+              >×</button>
+            </span>
+          </div>
+        </div>
+      </div>
+      <p v-else class="empty">物品库为空，在行李清单添加自定义物品时可勾选存入</p>
+      <p class="lib-tip text-muted">从物品库删除不会影响已生成到出行计划中的物品</p>
     </div>
 
     <!-- 出行总结 -->
@@ -99,6 +153,77 @@ const summarized = computed(() => store.plans.filter((p) => p.summary))
 
 .link-row {
   cursor: pointer;
+}
+
+.lib-add {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.lib-add .input {
+  flex: 1;
+}
+
+.lib-add .select {
+  width: auto;
+}
+
+.lib-group {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.lib-group + .lib-group {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border);
+}
+
+.lib-cat {
+  flex-shrink: 0;
+  width: 70px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 28px;
+}
+
+.lib-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.lib-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--primary-light);
+  color: var(--primary);
+  border-radius: 20px;
+  padding: 3px 8px 3px 12px;
+  font-size: 13px;
+}
+
+.lib-remove {
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-size: 14px;
+  line-height: 1;
+  opacity: 0.6;
+  padding: 0 2px;
+}
+
+.lib-remove:hover {
+  opacity: 1;
+  color: var(--danger);
+}
+
+.lib-tip {
+  margin-top: 12px;
+  font-size: 12px;
 }
 
 .summary-list {

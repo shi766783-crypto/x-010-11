@@ -2,7 +2,7 @@
 import { computed, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useTravelStore } from '../stores/travel'
-import { TRIP_TYPES, TRANSPORTS } from '../constants'
+import { TRIP_TYPES, TRANSPORTS, LUGGAGE_CATEGORIES } from '../constants'
 import { daysBetween } from '../utils/format'
 import ImageUpload from '../components/common/ImageUpload.vue'
 
@@ -52,6 +52,15 @@ if (isEdit.value && planId.value) {
 
 const days = computed(() => daysBetween(form.startDate, form.endDate))
 
+// 从物品库挑选的物品（仅新建计划时可选，将加入每位成员的行李清单）
+const selectedLibraryIds = ref([])
+const libraryGroups = computed(() =>
+  LUGGAGE_CATEGORIES.map((cat) => ({
+    cat,
+    items: store.itemLibrary.filter((i) => i.category === cat),
+  })).filter((g) => g.items.length > 0)
+)
+
 function validate() {
   errors.value = {}
   if (!form.name.trim()) errors.value.name = '请输入出行名称'
@@ -78,6 +87,7 @@ function submit() {
     budget: form.budget,
     notes: form.notes,
     photo: form.photo,
+    libraryItemIds: selectedLibraryIds.value,
   }
 
   if (isEdit.value) {
@@ -159,6 +169,21 @@ function submit() {
       </div>
     </div>
 
+    <div v-if="!isEdit && libraryGroups.length" class="form-group">
+      <label class="form-label">从物品库挑选（可选，将加入每位成员的行李清单）</label>
+      <div class="library-pick">
+        <div v-for="group in libraryGroups" :key="group.cat" class="lib-cat">
+          <span class="lib-cat-name">{{ group.cat }}</span>
+          <div class="lib-options">
+            <label v-for="item in group.items" :key="item.id" class="lib-option">
+              <input v-model="selectedLibraryIds" type="checkbox" :value="item.id" />
+              {{ item.name }}
+            </label>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="form-group">
       <label class="form-label">备注</label>
       <textarea v-model="form.notes" class="textarea" placeholder="补充说明"></textarea>
@@ -179,5 +204,49 @@ function submit() {
 .form-error {
   color: var(--danger);
   font-size: 12px;
+}
+
+.library-pick {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+}
+
+.lib-cat {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.lib-cat + .lib-cat {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border);
+}
+
+.lib-cat-name {
+  flex-shrink: 0;
+  width: 70px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 28px;
+}
+
+.lib-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+}
+
+.lib-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 0;
+  cursor: pointer;
+}
+
+.lib-option input {
+  accent-color: var(--primary);
 }
 </style>
